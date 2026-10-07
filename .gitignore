@@ -1,0 +1,4 @@
+.index.db
+.index.db-*
+*.db-journal
+.DS_Store
