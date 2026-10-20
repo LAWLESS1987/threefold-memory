@@ -1,6 +1,6 @@
 ---
 name: note-openai-api-training-policy-20261020
-description: Lawrence's note: OpenAI pre-2023-03-01 API default training opt-in and relevance to Chat Smith (saved 2026-10-20, unverified)
+description: Lawrence's note: OpenAI pre-2023-03-01 API default training opt-in and relevance to Chat Smith (saved 2026-10-20, unverified) [amended 2026-10-20: verified]
 metadata:
   type: reference
   agent: grok-bot
@@ -38,3 +38,11 @@ Date: 2026-10-20
 ## After (outbound)
 
 Saved as a new memory through the store's put(), so the audit chain records it. No existing entry changed, so no tombstone was needed. The commit is local only, because pushes to threefold-memory are paused until Lawrence says otherwise.
+
+## Amendment 1 (2026-10-20, verification, on Lawrence's yes; the before above is unchanged)
+
+- Chat Smith did run on OpenAI's API. Vulcan Labs' App Store listing (app id 1559479889, version 3.7, late 2022 or later) says "powered by GPT-3 by OpenAI" and "built on top of GPT-3 from OpenAI, and Simsimi AI Chatbots technology" (https://www.chartoo.ch/itunes/app/1559479889-chat-smith-ki-chatbot-agent). Vulcan's Feb 2024 FAQ says it is an OpenAI partner at the "Enterprise Partner level" (https://vulcanlabs.freshdesk.com/en/support/solutions/articles/69000843734-chat-assistant-app-frequently-asked-questions-part-1-).
+- Qualifier 1: per the listing, the "emotional conversation" bot ran on Simsimi, not OpenAI, so not every Chat Smith chat went to OpenAI.
+- The March 1, 2023 quote matches OpenAI's docs word for word (https://developers.openai.com/api/docs/guides/your-data). TechCrunch covered it on 2023-03-01 (https://techcrunch.com/2023/03/01/addressing-criticism-openai-will-no-longer-use-customer-data-to-train-its-models-by-default/).
+- Qualifier 2: the old policy permitted training on API data, but no evidence shows it actually happened. In May 2023 Altman told CNBC "We don't train on any API data at all, we haven't for a while" (https://www.cnbc.com/2023/05/05/sam-altman-openai-wont-tap-into-customer-apis.html).
+- No source was found for the quoted phrase "may have been used for improvement if the customer had not previously opted out." Treat it as unsourced.
