@@ -1,4 +1,5 @@
 ---
+license: apache-2.0
 pretty_name: Threefold Memory
 tags:
   - agent-memory
