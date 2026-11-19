@@ -30,6 +30,17 @@ records it in the known-breaks file, by line and hash, saying where it is writte
 
 WHAT IT DOES NOT SHOW. That a memory file still matches what the ledger recorded for it (covenant's
 `verify_integrity` does that). That nobody force-pushed a rewrite on a branch no check ran on. Who wrote a line.
+  A REWRITE FAILS ONCE. The next push is compared with the rewritten tip and is green again, so that one red run
+  is the whole record of it. A red run on this check is never "flaky": read it.
+  A CHANGE TO THE CHECK JUDGES ITSELF. A push or pull request that edits this script, its workflow or the
+  known-breaks list is checked by its own edited copy, so a green run on such a change says nothing about the
+  ledger. The run says so in a line starting NOTE, and the workflow also runs the previous tip's copy of this
+  script over the new ledger. A change to the workflow file itself can still switch everything off; a person
+  reading the diff is the only guard for that.
+
+A NEW BRANCH has no previous tip. With `--merge-base-with REF` the comparison is then made with the commit the
+branch forked from, not with REF's tip: the default branch gains lines every few hours, and its longer ledger is
+honestly not a prefix of an older branch's.
 
 LINE ENDINGS. The ledger is hashed byte for byte. A checkout that turned LF into CRLF (Windows with
 core.autocrlf=true) would make every link look broken, so `.gitattributes` marks the file `-text`, and if the
@@ -37,7 +48,9 @@ working copy still differs from the committed blob only by CRLF the committed by
 
   python .github/verify_ledger.py                      links; append-only against HEAD's first parent (weaker)
   python .github/verify_ledger.py --previous SHA       links; append-only against that commit
-  python .github/verify_ledger.py --previous SHA --require-previous    as CI runs it: no comparison = exit 2
+  python .github/verify_ledger.py --previous SHA --merge-base-with origin/main --require-previous
+                                                       as CI runs it: no comparison made = exit 2, never a pass
+  --root DIR, --known FILE                             check another checkout's ledger, or with another list
   python .github/verify_ledger.py --selftest           fixtures and throwaway git repositories, both ways
 
 Standard library and git only. Exit 0 = nothing new is wrong; 1 = something is; 2 = the check could not run.
@@ -121,6 +134,40 @@ def extends(now, previous, root=ROOT):
     if rc == 0 and not ever.strip():
         return True, "%s and its history hold no ledger: this is where it is first added" % previous[:12]
     return False, "%s holds no ledger but its history did: the ledger was removed and put back" % previous[:12]
+
+
+def is_zero(previous):
+    return (not previous) or set(previous) == {"0"}
+
+
+def resolve_previous(previous, merge_base_with, require, root=ROOT):
+    """(commit to compare with or "", a word to print beside the result, why not when there is none).
+
+    Under `require` (how CI runs) there is NO quiet fallback: an empty or all-zero previous with no merge-base to
+    use is "could not check". The first-parent fallback is for a run by hand only. The first version of this
+    function's caller fell back to HEAD's first parent even when required, and a two-commit rewrite passed it."""
+    if not is_zero(previous):
+        return previous, "", ""
+    if merge_base_with:
+        rc, out = git(root, "merge-base", "HEAD", merge_base_with)
+        if rc == 0 and out.strip():
+            return out.decode().strip(), " [a new branch: compared with where it forked from %s]" % merge_base_with, ""
+        return "", "", "no merge-base with %s could be found" % merge_base_with
+    if require:
+        return "", "", "no previous tip was given and this run requires one"
+    rc, out = git(root, "rev-parse", "--verify", "-q", "HEAD^1")
+    if rc == 0 and out.strip():
+        return out.decode().strip(), " [HEAD's first parent only: weaker than the branch's previous tip]", ""
+    return "", "", "no previous commit to compare with"
+
+
+CHECK_FILES = (".github/verify_ledger.py", ".github/workflows/ledger.yml", ".github/ledger_known_breaks.json")
+
+
+def check_files_changed(previous, root=ROOT):
+    """Which of the check's own files differ between `previous` and HEAD."""
+    rc, out = git(root, "diff", "--name-only", previous, "HEAD", "--", *CHECK_FILES)
+    return [l for l in out.decode().splitlines() if l.strip()] if rc == 0 else []
 
 
 def committed_bytes_if_only_crlf(raw, root=ROOT):
@@ -235,6 +282,34 @@ def selftest():
         cases.append(("git S5: two honest writers pass append-only...", extends(now(), tip1, tmp)[0] is True))
         cases.append(("git S5: ...and still break a link, on purpose (the line-1008 shape)",
                       any("NEW BREAK at line 6" in p for p in judge(now().decode(), [])[0])))
+        # round 3: what a second read of round 2 found
+        cases.append(("required, with an empty previous and nothing to fall back on: no commit, and it says why",
+                      resolve_previous("", "", True, tmp)[0] == "" and resolve_previous("0" * 40, "", True, tmp)[0] == ""))
+        cases.append(("...the control: by hand, the same call falls back to the first parent and labels it weaker",
+                      resolve_previous("", "", False, tmp)[0] == g("rev-parse", "HEAD^1")
+                      and "weaker" in resolve_previous("", "", False, tmp)[1]))
+        g("checkout", "-q", "-B", "trunk", tip1)
+        put(ok[:6], "the default branch moves on")
+        g("checkout", "-q", "-b", "late", base)                          # a new branch cut from an OLDER commit
+        with open(os.path.join(tmp, "NOTE.txt"), "w") as fh:
+            fh.write("a change that does not touch the ledger\n")
+        g("add", "-A")
+        g("commit", "-q", "-m", "late branch, ledger untouched")
+        mb = resolve_previous("0" * 40, "trunk", True, tmp)
+        cases.append(("a new branch from an older commit fails against the moved default tip (the false red)...",
+                      extends(now(), g("rev-parse", "trunk"), tmp)[0] is False))
+        cases.append(("...and passes against where it forked from", mb[0] == base and extends(now(), mb[0], tmp)[0] is True))
+        put(rewritten(ok[:4]), "late branch rewrites line 3")
+        cases.append(("...while a rewrite on that new branch still fails against where it forked from",
+                      extends(now(), resolve_previous("", "trunk", True, tmp)[0], tmp)[0] is False))
+        os.makedirs(os.path.join(tmp, ".github"), exist_ok=True)
+        with open(os.path.join(tmp, ".github", "ledger_known_breaks.json"), "w") as fh:
+            fh.write("{}\n")
+        g("add", "-A")
+        g("commit", "-q", "-m", "edit the known-breaks list")
+        cases.append(("a change to the check's own files is named", check_files_changed(base, tmp) == [".github/ledger_known_breaks.json"]))
+        cases.append(("...and a change that leaves them alone names none", check_files_changed("HEAD", tmp) == []))
+        g("checkout", "-q", "two")
         with open(os.path.join(tmp, LEDGER), "wb") as fh:
             fh.write(("\r\n".join(ok[:5] + y) + "\r\n").encode())
         raw = now()
@@ -258,15 +333,21 @@ def main():
     args = sys.argv[1:]
     if "--selftest" in args:
         return selftest()
-    previous = args[args.index("--previous") + 1] if "--previous" in args else os.environ.get("LEDGER_PREVIOUS", "")
+    def opt(name, default=""):
+        return args[args.index(name) + 1] if name in args and args.index(name) + 1 < len(args) else default
+
+    previous = opt("--previous", os.environ.get("LEDGER_PREVIOUS", ""))
+    merge_base_with = opt("--merge-base-with")
     require = "--require-previous" in args
+    root = os.path.abspath(opt("--root", ROOT))
+    known_path = opt("--known", os.path.join(root, ".github", "ledger_known_breaks.json") if "--root" in args else KNOWN)
     try:
-        raw = open(os.path.join(ROOT, LEDGER), "rb").read()
-        known = json.load(open(KNOWN, encoding="utf-8"))["breaks"]
+        raw = open(os.path.join(root, LEDGER), "rb").read()
+        known = json.load(open(known_path, encoding="utf-8"))["breaks"]
     except (OSError, ValueError, KeyError) as e:
         print("could not run: %s: %s" % (type(e).__name__, e))
         return 2
-    blob = committed_bytes_if_only_crlf(raw)
+    blob = committed_bytes_if_only_crlf(raw, root)
     if blob is not None:
         print("line endings: this checkout turned LF into CRLF; checking the committed bytes instead")
         raw = blob
@@ -274,17 +355,17 @@ def main():
     print("audit.jsonl: %d entries, %d break(s) in the chain, %d recorded as known" % (n, nbreaks, len(known)))
     for k in known:
         print("  known break, line %s: %s" % (k["line"], k.get("recorded", "")))
-    weaker = ""
-    if not previous or set(previous) == {"0"}:
-        rc, out = git(ROOT, "rev-parse", "--verify", "-q", "HEAD^1")
-        previous = out.decode().strip() if rc == 0 else ""
-        weaker = " [HEAD's first parent only: weaker than the branch's previous tip]"
+    previous, weaker, why_not = resolve_previous(previous, merge_base_with, require, root)
     could_not = False
     if not previous:
-        print("append-only: NOT CHECKED (no previous commit to compare with)")
+        print("append-only: NOT CHECKED (%s)" % why_not)
         could_not = True
     else:
-        verdict, words = extends(raw, previous)
+        touched = check_files_changed(previous, root)
+        if touched:
+            print("NOTE: this change edits the check itself (%s). A green run here is NOT evidence about the "
+                  "ledger; read the diff of those files." % ", ".join(touched))
+        verdict, words = extends(raw, previous, root)
         if verdict is None:
             print("append-only: NOT CHECKED (%s)" % words)
             could_not = True
