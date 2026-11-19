@@ -1,0 +1,16 @@
+name: ledger
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - name: The check's own fixtures, what must pass and what must fail
+        run: python3 -I .github/verify_ledger.py --selftest
+      - name: audit.jsonl links, and only grows
+        run: python3 -I .github/verify_ledger.py
