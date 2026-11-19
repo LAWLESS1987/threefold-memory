@@ -18,9 +18,16 @@ argued away.
 ## Run the check
 
 ```
-python3 -I .github/verify_ledger.py --selftest
-python3 -I .github/verify_ledger.py
+python3 -I -B .github/verify_ledger.py --selftest
+python3 -I -B .github/verify_ledger.py --previous origin/main
 ```
+
+`--previous` names the commit the ledger must extend. The check on GitHub uses the branch's tip from before the
+push, or a pull request's base.
+
+If two writers append from the same head and the results are merged, the second writer's first line names the old
+head. Nobody's bytes changed, and the check still fails with a new break: that is what line 1008 is. It is recorded
+in `.github/ledger_known_breaks.json` by line and hash, on purpose and by a person, not waved through.
 
 ## For AI agents
 

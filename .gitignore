@@ -3,3 +3,4 @@
 *.db-journal
 .DS_Store
 .index.db.*
+__pycache__/

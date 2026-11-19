@@ -1,0 +1,2 @@
+# The ledger is hashed byte for byte: a checkout must never rewrite its line endings.
+audit.jsonl -text

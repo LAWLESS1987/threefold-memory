@@ -8,9 +8,22 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           persist-credentials: false
       - name: The check's own fixtures, what must pass and what must fail
-        run: python3 -I .github/verify_ledger.py --selftest
-      - name: audit.jsonl links, and only grows
-        run: python3 -I .github/verify_ledger.py
+        run: python3 -I -B .github/verify_ledger.py --selftest
+      - name: audit.jsonl links, and only grows since the branch's previous tip
+        # The previous tip is the commit this branch pointed at before the push, or a pull request's base. Never
+        # "a parent of HEAD": the tip's own parent may already hold a rewrite (see the script's docstring).
+        # The event values arrive through the environment, not through the script text.
+        env:
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          DEFAULT_TIP: origin/${{ github.event.repository.default_branch }}
+        run: |
+          PREV="${PR_BASE:-$BEFORE}"
+          case "$PREV" in
+            ""|0000000000000000000000000000000000000000) PREV="$(git rev-parse "$DEFAULT_TIP")" ;;
+          esac
+          git cat-file -e "${PREV}^{commit}" 2>/dev/null || git fetch --no-tags --quiet origin "$PREV" || true
+          python3 -I -B .github/verify_ledger.py --previous "$PREV" --require-previous

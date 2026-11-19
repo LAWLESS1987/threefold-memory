@@ -34,8 +34,8 @@ so the chain forks at line 1008 ([issue #1](https://github.com/LAWLESS1987/three
 covenant as A419). The cause is undetermined. Every other link, before and after, holds: 1,102 entries, one break.
 
 Since 2026-11-18 a check runs on every push (`.github/verify_ledger.py`). It lists that one break by line and hash
-in `.github/ledger_known_breaks.json`, fails on any other break, and fails if an existing line is changed or
-removed. It does not show that each memory file still matches its ledger line; covenant's `verify_integrity` does
+in `.github/ledger_known_breaks.json`, fails on any other break, and fails if the ledger no longer extends the one
+at the branch's previous tip, which is what catches an old line rewritten and re-chained. It does not show that each memory file still matches its ledger line; covenant's `verify_integrity` does
 that; run on 2026-11-18 at commit `89ad290` it found 1,043 of 1,047 matching, 1 drifted and 0 missing.
 
 ---
