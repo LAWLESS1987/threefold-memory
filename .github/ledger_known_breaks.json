@@ -1,0 +1,14 @@
+{
+  "about": "Breaks in audit.jsonl's chain that are recorded. .github/verify_ledger.py fails on any break that is not listed here, and on a listed line whose bytes change. Adding an entry is a recorded decision: say where the break is written up.",
+  "breaks": [
+    {
+      "line": 1008,
+      "line_sha256": "dc4ff99ea44ced58debe98994fe1ce930deac0b22962dbe59490d318f38c5fbe",
+      "names": "712358c8a33a8b81f6b52dc2551d86e153411ccfd3389d67950ea67d4d07659b",
+      "rule_expected": "953ea1110aafacf8215e1a8646ccbaef1be560181bd8ffb47367850db3792be1",
+      "names_line": 1006,
+      "recorded": "issue #1 in this repository; covenant docs/KNOWN_ISSUES.md A419. Lines 1007 and 1008 both name line 1006 as their predecessor. Found 2026-11-13. Cause undetermined.",
+      "listed": "2026-11-18"
+    }
+  ]
+}

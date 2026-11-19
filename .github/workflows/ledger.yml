@@ -1,0 +1,46 @@
+name: ledger
+on:
+  push:
+    branches: ['**']        # branches only: a tag on an older commit has no previous tip to extend
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: The check's own fixtures, what must pass and what must fail
+        run: python3 -I -B .github/verify_ledger.py --selftest
+      - name: audit.jsonl links, and only grows since the branch's previous tip
+        # The previous tip is the commit this branch pointed at before the push, or a pull request's base. Never
+        # "a parent of HEAD": the tip's own parent may already hold a rewrite (see the script's docstring).
+        # A new branch has none (BEFORE is zeros); the script then compares with where the branch forked from.
+        # The event values arrive through the environment, not through the script text. The shell runs with -e:
+        # a command that fails stops the step, and the script itself refuses to pass without a comparison.
+        env:
+          BEFORE: ${{ github.event.before }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          DEFAULT_TIP: origin/${{ github.event.repository.default_branch }}
+        run: |
+          PREV="${PR_BASE:-$BEFORE}"
+          git rev-parse --verify --quiet "${DEFAULT_TIP}^{commit}" >/dev/null
+          case "$PREV" in
+            ""|0000000000000000000000000000000000000000) PREV="" ;;
+            *) git cat-file -e "${PREV}^{commit}" 2>/dev/null || git fetch --no-tags --quiet origin "$PREV" || true ;;
+          esac
+          python3 -I -B .github/verify_ledger.py --previous "$PREV" --merge-base-with "$DEFAULT_TIP" --require-previous
+          # The previous tip's copy of the check, over the ledger as it is now. A change that edits the script is
+          # otherwise judged only by its own edited copy.
+          if [ -n "$PREV" ] && git cat-file -e "${PREV}:.github/verify_ledger.py" 2>/dev/null; then
+            mkdir -p "$RUNNER_TEMP/previous"
+            git show "${PREV}:.github/verify_ledger.py" > "$RUNNER_TEMP/previous/verify_ledger.py"
+            if grep -q -- "--root" "$RUNNER_TEMP/previous/verify_ledger.py"; then
+              echo "--- the previous tip's copy of the check ---"
+              python3 -I -B "$RUNNER_TEMP/previous/verify_ledger.py" --root "$GITHUB_WORKSPACE" \
+                --previous "$PREV" --merge-base-with "$DEFAULT_TIP" --require-previous
+            fi
+          fi

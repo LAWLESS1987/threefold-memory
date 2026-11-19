@@ -27,6 +27,17 @@ export AI_MEMORY_ROOT=/path/to/threefold-memory
 Triad writes (`put_covenant_memory.sh`) commit and push here after each put when `git` remotes are configured.
 
 
+## Known state of the ledger (2026-11-18)
+
+`audit.jsonl` does not verify as one unbroken chain. Lines 1007 and 1008 both name line 1006 as their predecessor,
+so the chain forks at line 1008 ([issue #1](https://github.com/LAWLESS1987/threefold-memory/issues/1); recorded in
+covenant as A419). The cause is undetermined. Every other link, before and after, holds: 1,102 entries, one break.
+
+Since 2026-11-18 a check runs on every push (`.github/verify_ledger.py`). It lists that one break by line and hash
+in `.github/ledger_known_breaks.json`, fails on any other break, and fails if the ledger no longer extends the one
+at the branch's previous tip, which is what catches an old line rewritten and re-chained. It does not show that each memory file still matches its ledger line; covenant's `verify_integrity` does
+that; run on 2026-11-18 at commit `89ad290` it found 1,043 of 1,047 matching, 1 drifted and 0 missing.
+
 ---
 
 ## Part of one system — each piece usable on its own
