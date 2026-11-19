@@ -35,8 +35,10 @@ WHAT IT DOES NOT SHOW. That a memory file still matches what the ledger recorded
   A CHANGE TO THE CHECK JUDGES ITSELF. A push or pull request that edits this script, its workflow or the
   known-breaks list is checked by its own edited copy, so a green run on such a change says nothing about the
   ledger. The run says so in a line starting NOTE, and the workflow also runs the previous tip's copy of this
-  script over the new ledger. A change to the workflow file itself can still switch everything off; a person
-  reading the diff is the only guard for that.
+  script over the new ledger. That copy reads the NEW known-breaks list, so a change that only adds an entry is
+  accepted by both copies and shows only in the NOTE line and in the diff: adding an entry is a recorded
+  decision, and a person reads it. A change to the workflow file itself can still switch everything off; a person
+  reading the diff is the only guard for that too.
 
 A NEW BRANCH has no previous tip. With `--merge-base-with REF` the comparison is then made with the commit the
 branch forked from, not with REF's tip: the default branch gains lines every few hours, and its longer ledger is
