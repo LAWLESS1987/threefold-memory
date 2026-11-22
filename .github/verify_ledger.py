@@ -9,8 +9,10 @@ WHAT IT CHECKS.
   1. LINKS. Each line's `prev` must be the SHA-256 of the line before it (the first line's is 64 zeros), the rule
      covenant's `ai_memory_system.MemoryStore.verify_chain` uses. A line that breaks the rule is a BREAK.
   2. KNOWN BREAKS ARE NAMED, NOT FORGIVEN IN GENERAL. `.github/ledger_known_breaks.json` lists each recorded break
-     by line number AND by the SHA-256 of that exact line. A break that is not on the list fails. A listed line
-     whose bytes have changed fails. A listed break that is no longer a break fails, because then the list is
+     by line number AND by the SHA-256 of that exact line AND by the SHA-256 of the line before it
+     (`rule_expected`, 2026-11-22). A break that is not on the list fails. A listed line whose bytes have changed
+     fails, and so does one whose preceding line changed: that line links on by its own prev, so without the pin
+     an edit to it would show nowhere in the walk. A listed break that is no longer a break fails, because then the list is
      wrong. After a break the walk continues from the breaking line, so everything after it is still checked.
   3. APPEND-ONLY, AGAINST THE BRANCH'S PREVIOUS TIP. The ledger at the previous tip (`--previous SHA`: the commit
      the branch pointed at before this push, or a pull request's base) must be an exact prefix of the ledger now.
@@ -108,6 +110,11 @@ def judge(text, known):
                 line_no, str(named)[:16], expected[:16]))
         elif k.get("line_sha256") != line_sha:
             problems.append("line %d is a listed break but its bytes have CHANGED since it was recorded" % line_no)
+        elif k.get("rule_expected") != expected:
+            # The line before a break links on by its own prev, so an edit to it shows nowhere in the walk. The
+            # entry pins it: rule_expected is the SHA-256 of that line as it was when the break was recorded.
+            problems.append("line %d is a listed break but the line before it has CHANGED since it was recorded, "
+                            "or the entry does not pin it (rule_expected): the rule now expects %s" % (line_no, expected[:16]))
         else:
             seen.add(line_no)
     for line_no in sorted(set(listed) - seen - {b[0] for b in breaks}):
@@ -197,7 +204,10 @@ def selftest():
     fork[4] = json.dumps(dict(json.loads(ok[4]), prev=json.loads(ok[3])["prev"]), sort_keys=True)   # 5 names 3, like 1008
     fork[5] = json.dumps(dict(json.loads(ok[5]), prev=sha(fork[4])), sort_keys=True)                # 6 follows 5
     forked = "\n".join(fork) + "\n"
-    listed = [{"line": 5, "line_sha256": sha(fork[4])}]
+    listed = [{"line": 5, "line_sha256": sha(fork[4]), "rule_expected": sha(fork[3])}]
+    before = list(fork)                                                                            # line 4, the line
+    before[3] = json.dumps(dict(json.loads(fork[3]), n=44), sort_keys=True)                         # before the break,
+    edited_before = "\n".join(before) + "\n"                                                      # edited in place
     cases = [
         ("a clean chain passes", judge(good, [])[0] == []),
         ("a fork that is not listed fails", any("NEW BREAK at line 5" in p for p in judge(forked, [])[0])),
@@ -207,6 +217,12 @@ def selftest():
         ("a second break after a listed one still fails",
          any("NEW BREAK at line 6" in p for p in judge("\n".join(fork[:5] + [ok[5]]) + "\n", listed)[0])),
         ("a listed break that is not a break fails", any("list is wrong" in p for p in judge(good, listed)[0])),
+        ("the line before a listed break, edited, links on and the walk alone misses it", judge(edited_before, [])[0]
+         and all("line 4" not in p for p in judge(edited_before, [])[0])),
+        ("the line before a listed break, edited, fails against its pin",
+         any("line before it" in p for p in judge(edited_before, listed)[0])),
+        ("a listed break that does not pin the line before it fails",
+         any("line before it" in p for p in judge(forked, [{"line": 5, "line_sha256": sha(fork[4])}])[0])),
         ("a line that is not JSON is a break", any("NEW BREAK at line 3" in p
                                                    for p in judge("\n".join(ok[:2] + ["not json"] + ok[3:]) + "\n", [])[0])),
         ("an edited old line breaks the link after it", any("NEW BREAK at line 3" in p for p in judge(

@@ -1,5 +1,5 @@
 {
-  "about": "Breaks in audit.jsonl's chain that are recorded. .github/verify_ledger.py fails on any break that is not listed here, and on a listed line whose bytes change. Adding an entry is a recorded decision: say where the break is written up.",
+  "about": "Breaks in audit.jsonl's chain that are recorded. .github/verify_ledger.py fails on any break that is not listed here, on a listed line whose bytes change, and on one whose preceding line changed (rule_expected is the SHA-256 of that line). Adding an entry is a recorded decision: say where the break is written up.",
   "breaks": [
     {
       "line": 1008,
